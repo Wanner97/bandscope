@@ -1,0 +1,333 @@
+﻿@page "/profile"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Client.APIs
+@using BandScope.Client.Utility
+@using Client.Pages.Dialog
+@using System.Text.RegularExpressions
+@using System.Net
+@inject ServerApi ServerApi
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+@inject NavigationManager NavManager
+@inject Blazored.LocalStorage.ILocalStorageService _LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
+
+<CheckAuthExpired/>
+
+<AuthorizeView>
+    <Authorized>
+        <RadzenCard Variant="Variant.Flat">
+            <RadzenText TextStyle="TextStyle.DisplayH1" TextAlign="TextAlign.Center">@_user.Nickname</RadzenText>
+
+            <RadzenStack AlignItems="AlignItems.Center">
+                <RadzenCard Variant="Variant.Outlined" Style="width: 800px">
+                    <RadzenStack AlignItems="AlignItems.Center">
+                        <RadzenButton Text="Edit Profile" Icon="person_edit" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Outlined" Click="@OnClickEditProfile" />
+                        <RadzenButton Text="Delete Profile" Icon="person_off" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Click="@(() => OnClickDeleteProfile())" />
+                    </RadzenStack>
+                </RadzenCard>
+            </RadzenStack>
+        </RadzenCard>
+        
+        <RadzenCard Variant="Variant.Flat">
+            <RadzenTabs>
+                <Tabs>
+                    <RadzenTabsItem Text="My Reviews">
+                        <RadzenDataGrid AllowColumnResize="true"
+                                        AllowSorting="true"
+                                        AllowPaging="true"
+                                        PageSize="10"
+                                        PagerHorizontalAlign="HorizontalAlign.Right"
+                                        ShowPagingSummary="true" Data="_userReviews"
+                                        TItem="ReviewOnUserProfileDto"
+                                        AllowFiltering="false">
+                            <Columns>
+                                <RadzenDataGridColumn TItem="ReviewOnUserProfileDto" Property="ArtistName" Title="Artist" Sortable="true"/>
+                                
+                                <RadzenDataGridColumn TItem="ReviewOnUserProfileDto" Title="Review Excerpt" Sortable="false">
+                                    <Template Context="row">
+                                        @GetReviewExcerpt(row)
+                                    </Template>
+                                </RadzenDataGridColumn>
+                                
+                                <RadzenDataGridColumn TItem="ReviewOnUserProfileDto"
+                                                      Property="Rating"
+                                                      Sortable="true"
+                                                      TextAlign="TextAlign.Center"
+                                                      Title="Rating"/>
+                                
+                                <RadzenDataGridColumn TItem="ReviewOnUserProfileDto" Title="Actions" Sortable="false">
+                                    <Template Context="row">
+                                        <RadzenStack AlignItems="AlignItems.Center" Gap="10px">
+                                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="8px">
+                                                <RadzenButton Text="Details" Icon="rate_review" ButtonStyle="ButtonStyle.Primary"
+                                                              Variant="Variant.Outlined" Click="@(() => OpenReviewDetails(row))" />
+                                                
+                                                <RadzenButton Text="Delete" Icon="delete" ButtonStyle="ButtonStyle.Danger"
+                                                              Variant="Variant.Outlined" Click="@(() => OnClickDeleteReview(row))" />
+                                            </RadzenStack>
+                                        </RadzenStack>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    </RadzenTabsItem>
+                    
+                    <RadzenTabsItem Text="My Favorites">
+                        <RadzenDataGrid AllowColumnResize="true"
+                                        AllowSorting="true"
+                                        AllowPaging="true"
+                                        PageSize="10"
+                                        PagerHorizontalAlign="HorizontalAlign.Right"
+                                        ShowPagingSummary="true"
+                                        Data="_userFavorites"
+                                        TItem="ArtistOnUserProfileDto"
+                                        AllowFiltering="false">
+                            <Columns>
+                                <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="Id" Title="ID" Sortable="true" TextAlign="TextAlign.Center"/>
+                                
+                                <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="Name" Title="Artist" Sortable="true" TextAlign="TextAlign.Left"/>
+                                
+                                <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="TheAudioDbId" Title="TheAudioDb ID" TextAlign="TextAlign.Center"/>
+                                
+                                <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Title="Actions" Sortable="false">
+                                    <Template Context="row">
+                                        <RadzenStack Orientation="Orientation.Horizontal" Gap="8px" Style="width: 100%" AlignItems="AlignItems.Stretch">
+                                            <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Primary"
+                                                          Icon="artist" Text="Details" Click="@(() => OnClickDetails(row.Id))" Style="align-self: start" />
+                                            
+                                            <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Danger" Icon="bookmark_remove"
+                                                          Text="Remove Favorite" Click="@(() => OnClickUnfavorite(row))" Style="align-self: end" />
+                                        </RadzenStack>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    </RadzenTabsItem>
+                </Tabs>
+            </RadzenTabs>
+        </RadzenCard>
+    </Authorized>
+</AuthorizeView>
+
+
+
+
+@code {
+    private UserProfileDto _user;
+    private List<ReviewOnUserProfileDto> _userReviews = new();
+    private List<ArtistOnUserProfileDto> _userFavorites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userResponse = await ServerApi.GetAsync<UserProfileDto>("api/user/profilebyid");
+
+        if (userResponse.IsSuccessStatusCode)
+        {
+            _user = userResponse.Result;
+
+            var reviewResponse = await ServerApi.GetAsync<List<ReviewOnUserProfileDto>>("api/review/byuser");
+
+            if (reviewResponse.IsSuccessStatusCode)
+            {
+                _userReviews = reviewResponse.Result;
+            }
+
+            var favoriteResponse = await ServerApi.GetAsync<List<ArtistOnUserProfileDto>>("api/artist/favorites");
+
+            if (favoriteResponse.IsSuccessStatusCode)
+            {
+                _userFavorites = favoriteResponse.Result;
+            }
+        }
+    }
+
+    private async Task OnClickEditProfile()
+    {
+        var result = await DialogService.OpenAsync<UpdateProfileDialog>(
+            "Edit Profile",
+            null,
+            new DialogOptions
+            {
+                Width = "auto",
+                CloseDialogOnOverlayClick = false,
+                Resizable = true,
+                Draggable = true
+            });
+
+        if (result is bool ok && ok)
+        {
+            await OnInitializedAsync();
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Profile updated",
+                Detail = "Your profile has been updated.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnClickDeleteProfile()
+    {
+        var message = "Do you really want to delete your accout? This action can not be undone.";
+        var title = "Delete account?";
+
+        var result = await DialogService.Confirm(
+            message,
+            title,
+            new ConfirmOptions
+            {
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            });
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var response = await ServerApi.DeleteAsync<BoolFlagReturnDto>("api/user/delete/self");
+
+        if (response.IsSuccessStatusCode && response.Result.Flag)
+        {
+            await _LocalStorage.RemoveItemAsync("authToken");
+            var authStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+
+            authStateProvider.NotifyUserAuthenticationStateChanged();
+            StateHasChanged();
+
+            NavManager.NavigateTo("/");
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Account deleted",
+                Detail = "Your account has been deleted.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+        }
+    }
+
+    private async Task OpenReviewDetails(ReviewOnUserProfileDto reviewOnUserProfileDto)
+    {
+        await DialogService.OpenAsync<ReviewDetailDialog>(
+            $"Review of {reviewOnUserProfileDto.ArtistName}",
+            new Dictionary<string, object>
+            {
+                { "ReviewId", reviewOnUserProfileDto.Id }
+            },
+            new DialogOptions
+            {
+                Width = "auto",
+                Height = "auto",
+                Resizable = true,
+                Draggable = true,
+                CloseDialogOnOverlayClick = true
+            });
+    }
+
+    private async Task OnClickDeleteReview(ReviewOnUserProfileDto reviewOnUserProfileDto)
+    {
+        var message = $"Do you really want to delete your review for '{reviewOnUserProfileDto.ArtistName}'? This action can not be undone.";
+        var title = "Delete review?";
+
+        var result = await DialogService.Confirm(
+            message,
+            title,
+            new ConfirmOptions
+            {
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            });
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var response = await ServerApi.DeleteAsync<BoolFlagReturnDto>($"api/review/delete/{reviewOnUserProfileDto.Id}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var reload = await ServerApi.GetAsync<List<ReviewOnUserProfileDto>>("api/review/byuser");
+
+            _userReviews = reload.Result;
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Review deleted",
+                Detail = $"Your review for '{reviewOnUserProfileDto.ArtistName}' has been deleted.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnClickUnfavorite(ArtistOnUserProfileDto artistOnUserProfileDto)
+    {
+        var message = $"Do you really want to remove '{artistOnUserProfileDto.Name}' from your favorites?";
+        var title = "Remove favorite?";
+
+        var result = await DialogService.Confirm(
+            message,
+            title,
+            new ConfirmOptions
+            {
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            });
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var response = await ServerApi.DeleteAsync<BoolFlagReturnDto>($"api/artist/favorite/{artistOnUserProfileDto.Id}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var reload = await ServerApi.GetAsync<List<ArtistOnUserProfileDto>>("api/artist/favorites");
+
+            _userFavorites = reload.Result;
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Favorite removed",
+                Detail = $"{artistOnUserProfileDto.Name} has been removed from your favorites.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+        }
+    }
+
+    private string GetReviewExcerpt(ReviewOnUserProfileDto reviewOnUserProfileDto)
+    {
+        if (string.IsNullOrWhiteSpace(reviewOnUserProfileDto.Comment))
+        {
+            return string.Empty;
+        }
+
+        var text = reviewOnUserProfileDto.Comment.Replace("\r", " ").Replace("\n", " ");
+
+        text = Regex.Replace(text, "<.*?>", string.Empty, RegexOptions.Singleline);
+
+        text = WebUtility.HtmlDecode(text);
+
+        text = Regex.Replace(text, @"\s", " ").Trim();
+
+        return text.Length <= 80 ? text : text[..80] + "...";
+    }
+
+    private void OnClickDetails(int artistId)
+    {
+        NavManager.NavigateTo($"artist/{artistId}");
+    }
+}

@@ -1,0 +1,118 @@
+﻿@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Client.APIs
+@inject NavigationManager NavManager
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ServerApi ServerApi
+@inject NotificationService NotificationService
+
+<RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center" Style="width: 600px">
+    <RadzenText TextStyle="TextStyle.DisplayH3">Login</RadzenText>
+    <RadzenTemplateForm TItem="LoginDto" Data="user" Submit="OnLogin" @ref="_loginForm" Style="width: 100%">
+        <RadzenFieldset Text="Enter your credentials">
+            <RadzenRow>
+                <RadzenFormField Text="E-Mail" Variant="Variant.Outlined" Component="EMailUser" Style="width: 100%">
+                    <ChildContent>
+                        <RadzenTextBox Name="EMailUser" @bind-Value="@user.Email"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenRequiredValidator Component="EMailUser" Text="E-Mail is required."/>
+                        <RadzenEmailValidator Component="EMailUser" Text="E-Mail is unvalid"/>
+                    </Helper>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenFormField Text="Password" Variant="Variant.Outlined" Component="Password" Style="width: 100%">
+                    <ChildContent>
+                        <RadzenPassword Name="Password" @bind-Value="@user.Password" Visible="@(passwordHidden)"/>
+                        <RadzenTextBox Name="Password" @bind-Value="@user.Password" Visible="@(!passwordHidden)"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenRequiredValidator Component="Password" Text="Password is required."/>
+                    </Helper>
+                    <End>
+                        <RadzenButton Icon="@(passwordHidden ? "visibility" : "visibility_off")"
+                                      Click="TogglePasswordVisibility"
+                                      Variant="Variant.Text"
+                                      Size="ButtonSize.Small"/>
+                    </End>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenButton class="rz-mt-2"
+                              Variant="Variant.Outlined"
+                              ButtonStyle="ButtonStyle.Primary"
+                              Icon="login"
+                              ButtonType="ButtonType.Submit"
+                              Text="Login"
+                              Style="width: 100%"/>
+            </RadzenRow>
+        </RadzenFieldset>
+    </RadzenTemplateForm>
+
+    <RadzenLink Text="Don't have an account yet? Sign Up" Path="/register" class="rz-mt-2" Style="align-self: center"/>
+</RadzenStack>
+
+@code {
+    private RadzenTemplateForm<LoginDto> _loginForm;
+
+    public bool passwordHidden = true;
+
+    public LoginDto user = new LoginDto();
+
+    private async void OnLogin()
+    {
+        if (string.IsNullOrWhiteSpace(user.Email) || string.IsNullOrWhiteSpace(user.Password))
+        {
+            _loginForm.EditContext.Validate();
+            return;
+        }
+
+        var isValid = _loginForm.EditContext.Validate();
+
+        if (!isValid)
+        {
+            return;
+        }
+
+        var response = await ServerApi.PostAsync<LoginReturnDto>("/api/user/login", user);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Check your credentials",
+                Detail = "E-Mail or password seems to be wrong",
+                Severity = NotificationSeverity.Info,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+            return;
+        }
+
+        var token = response.Result.Token;
+
+        await LocalStorage.SetItemAsync("authToken", token);
+        var authStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+        authStateProvider.NotifyUserAuthenticationStateChanged();
+
+        NavManager.NavigateTo("/");
+
+        NotificationService.Notify(new NotificationMessage
+        {
+            Summary = "Success",
+            Detail = "You are logged in now",
+            Severity = NotificationSeverity.Success,
+            Duration = 4000
+        });
+    }
+
+    public void TogglePasswordVisibility()
+    {
+        passwordHidden = !passwordHidden;
+    }
+}

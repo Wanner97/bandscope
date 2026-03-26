@@ -1,0 +1,56 @@
+﻿@using System.IdentityModel.Tokens.Jwt
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService _LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var isExpired = await IsExpiredAsync();
+
+        if (isExpired)
+        {
+            await _LocalStorage.RemoveItemAsync("authToken");
+            var authStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+            authStateProvider.NotifyUserAuthenticationStateChanged();
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private async Task<bool> IsExpiredAsync()
+    {
+        var tokenString = await _LocalStorage.GetItemAsStringAsync("authToken");
+
+        if (string.IsNullOrWhiteSpace(tokenString))
+        {
+            return true;
+        }
+
+        try
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            tokenString = tokenString.Trim('"');
+
+            if (!tokenHandler.CanReadToken(tokenString))
+            {
+                return true;
+            }
+
+            var token = tokenHandler.ReadJwtToken(tokenString);
+            var expirationClaim = token.Payload.Exp;
+
+            if (expirationClaim == null ||
+                DateTimeOffset.FromUnixTimeSeconds(expirationClaim.Value).UtcDateTime <= DateTime.UtcNow)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            return true;
+        }
+
+        return false;
+    }
+}

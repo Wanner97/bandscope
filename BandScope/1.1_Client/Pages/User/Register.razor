@@ -1,0 +1,218 @@
+﻿@page "/register"
+@using Client.APIs
+@inject NavigationManager NavManager
+@inject ServerApi ServerApi
+@inject NotificationService NotificationService
+
+<RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center" Style="width: 600px">
+    <RadzenText TextStyle="TextStyle.DisplayH3">Register</RadzenText>
+    <RadzenTemplateForm TItem="RegisterDto" Data="NewUser" Submit="OnRegister" @ref="_registerForm" Style="width: 100%">
+        <RadzenFieldset Text="Enter your credentials">
+            <RadzenRow>
+                <RadzenFormField Text="Nickname" Variant="Variant.Outlined" Component="Nickname" Style="width: 100%">
+                    <ChildContent>
+                        <RadzenTextBox Name="Nickname" @bind-Value="@NewUser.Nickname" Style="width: 100%" Change="@OnNicknameChanged"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenRequiredValidator Component="Nickname" Text="Nickname is required."/>
+                        <RadzenCustomValidator Component="Nickname"
+                                               Text="Nickname is already in use."
+                                               Validator="@ValidateNicknameUnique"/>
+                    </Helper>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenFormField Text="E-Mail" Variant="Variant.Outlined" Component="Email" Style="width: 100%">
+                    <ChildContent>
+                        <RadzenTextBox Name="Email" @bind-Value="@NewUser.Email" Style="width: 100%" Change="@OnEmailChanged"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenRequiredValidator Component="Email" Text="E-Mail is required."/>
+                        <RadzenEmailValidator Component="Email" Text="E-Mail is invalid"/>
+                        <RadzenCustomValidator Component="Email"
+                                               Text="E-Mail is already in use."
+                                               Validator="@ValidateEmailUnique"/>
+                    </Helper>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenFormField Text="Password" Variant="Variant.Outlined" Style="width: 100%" Component="Password">
+                    <ChildContent>
+                        <RadzenPassword Name="Password" @bind-Value="@NewUser.Password" Style="width: 100%" Visible="@passwordHidden"/>
+                        <RadzenTextBox Name="Password" @bind-Value="@NewUser.Password" Style="width: 100%" Visible="@(!passwordHidden)"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenRequiredValidator Component="Password" Text="Password is required."/>
+                        <RadzenRegexValidator Component="Password"
+                                              Pattern="^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{10,}$"
+                                              Text="Password must be at least 10 characters and contain one uppercase letter, one lowercase letter, one digit and one special character."></RadzenRegexValidator>
+                    </Helper>
+                    <End>
+                        <RadzenButton Icon="@(passwordHidden ? "visibility" : "visibility_off")"
+                                      Click="TogglePasswordVisibility"
+                                      Variant="Variant.Text"
+                                      Size="ButtonSize.Small"/>
+                    </End>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenFormField Text="Verify Password" Variant="Variant.Outlined" Component="VerifyPassword" Style="width: 100%">
+                    <ChildContent>
+                        <RadzenPassword Name="VerifyPassword" @bind-Value="@verifyPasswordValue" Style="width: 100%" Visible="@passwordHidden"/>
+                        <RadzenTextBox Name="VerifyPassword" @bind-Value="@verifyPasswordValue" Style="width: 100%" Visible="@(!passwordHidden)"/>
+                    </ChildContent>
+                    <Helper>
+                        <RadzenCustomValidator Component="VerifyPassword" Validator="@PasswordMatches" Text="Passwords don't match"/>
+                    </Helper>
+                    <End>
+                        <RadzenButton Icon="@(passwordHidden ? "visibility" : "visibility_off")"
+                                      Click="TogglePasswordVisibility"
+                                      Variant="Variant.Text"
+                                      Size="ButtonSize.Small"/>
+                    </End>
+                </RadzenFormField>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenButton class="rz-mt-2"
+                              Variant="Variant.Outlined"
+                              ButtonStyle="ButtonStyle.Primary"
+                              Icon="login"
+                              ButtonType="ButtonType.Submit"
+                              Text="Register"
+                              Style="width: 100%"/>
+            </RadzenRow>
+        </RadzenFieldset>
+    </RadzenTemplateForm>
+
+    <RadzenLink Text="Already have an account? Sign in" Path="/login" class="rz-mt-2" Style="align-self: center"/>
+</RadzenStack>
+
+@code {
+    private RadzenTemplateForm<RegisterDto> _registerForm;
+    private bool _nicknameAlreadyExists = false;
+    private bool _emailAlreadyExists = false;
+
+    public RegisterDto NewUser { get; set; }
+    public bool passwordHidden = true;
+    public string verifyPasswordValue = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        NewUser = new RegisterDto();
+    }
+
+    private async void OnRegister()
+    {
+        var isValid = _registerForm.EditContext.Validate();
+
+        if (!isValid)
+        {
+            return;
+        }
+
+        var response = await ServerApi.PostAsync<BoolFlagReturnDto>("api/user/register", NewUser);
+
+        if (response.IsSuccessStatusCode && response.Result.Flag)
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Success",
+                Detail = "Your user account has been registered",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            NavManager.NavigateTo("/login");
+            return;
+        }
+
+        return;
+    }
+
+    private async Task OnNicknameChanged()
+    {
+        var nicknameValue = NewUser.Nickname;
+        var nicknameField = new FieldIdentifier(NewUser, nameof(NewUser.Nickname));
+
+        if (string.IsNullOrWhiteSpace(nicknameValue))
+        {
+            _nicknameAlreadyExists = false;
+            _registerForm.EditContext.NotifyFieldChanged(nicknameField);
+            return;
+        }
+
+        var response = await ServerApi.GetAsync<BoolFlagReturnDto>($"api/user/nickname/{nicknameValue}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            _nicknameAlreadyExists = response.Result.Flag;
+        }
+
+        _registerForm.EditContext.NotifyFieldChanged(nicknameField);
+    }
+
+    private bool ValidateNicknameUnique()
+    {
+        if (_nicknameAlreadyExists)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+
+    private async Task OnEmailChanged()
+    {
+        var emailValue = NewUser.Email;
+        var emailField = new FieldIdentifier(NewUser, nameof(NewUser.Email));
+
+        if (string.IsNullOrWhiteSpace(emailValue))
+        {
+            _emailAlreadyExists = false;
+            _registerForm.EditContext.NotifyFieldChanged(emailField);
+            return;
+        }
+
+        var response = await ServerApi.GetAsync<BoolFlagReturnDto>($"api/user/email/{emailValue}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            _emailAlreadyExists = response.Result.Flag;
+        }
+
+        _registerForm.EditContext.NotifyFieldChanged(emailField);
+    }
+
+    private bool ValidateEmailUnique()
+    {
+        if (_emailAlreadyExists)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+
+    void TogglePasswordVisibility()
+    {
+        passwordHidden = !passwordHidden;
+    }
+
+    private bool PasswordMatches()
+    {
+        if (string.IsNullOrWhiteSpace(verifyPasswordValue))
+        {
+            return false;
+        }
+
+        return NewUser.Password == verifyPasswordValue;
+    }
+}

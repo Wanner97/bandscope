@@ -1,0 +1,113 @@
+﻿@page "/user{userId:int}/favorites"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@using Client.APIs
+@using BandScope.Client.Utility
+@inject ServerApi ServerApi
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+@inject NavigationManager NavManager
+
+<CheckAuthExpired />
+
+<AuthorizeView Roles="Administrator">
+    <RadzenText TextStyle="TextStyle.DisplayH3">@_userNickname's favorite artists</RadzenText>
+    
+    <RadzenDataGrid AllowColumnResize="true"
+                    AllowSorting="true"
+                    AllowPaging="true"
+                    PageSize="10"
+                    PagerHorizontalAlign="HorizontalAlign.Right"
+                    ShowPagingSummary="true"
+                    Data="_userFavorites"
+                    TItem="ArtistOnUserProfileDto"
+                    AllowFiltering="false">
+        <Columns>
+            <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="Id" Title="ID" Sortable="true" TextAlign="TextAlign.Center"/>
+                                
+            <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="Name" Title="Artist" Sortable="true" TextAlign="TextAlign.Left"/>
+                                
+            <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Property="TheAudioDbId" Title="TheAudioDb ID" TextAlign="TextAlign.Center"/>
+                                
+            <RadzenDataGridColumn TItem="ArtistOnUserProfileDto" Title="Actions" Sortable="false">
+                <Template Context="row">
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="8px" Style="width: 100%" AlignItems="AlignItems.Stretch">
+                        <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Primary"
+                                      Icon="artist" Text="Details" Click="@(() => OnClickDetails(row.Id))" Style="align-self: start" />
+                                            
+                        <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Danger" Icon="bookmark_remove"
+                                      Text="Remove Favorite" Click="@(() => OnClickUnfavorite(row))" Style="align-self: end" />
+                    </RadzenStack>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</AuthorizeView>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+
+    private List<ArtistOnUserProfileDto> _userFavorites = new();
+    private string _userNickname;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var favoritesResponse = await ServerApi.GetAsync<List<ArtistOnUserProfileDto>>($"api/artist/favorites/{UserId}");
+
+        if (favoritesResponse.IsSuccessStatusCode)
+        {
+            _userFavorites = favoritesResponse.Result;
+        }
+
+        var userResponse = await ServerApi.GetAsync<UserProfileDto>($"api/user/byid/{UserId}");
+
+        if (userResponse.IsSuccessStatusCode)
+        {
+            _userNickname = userResponse.Result.Nickname;
+        }
+    }
+
+    private async Task OnClickUnfavorite(ArtistOnUserProfileDto artistOnUserProfileDto)
+    {
+        var message = $"Do you really want to remove '{artistOnUserProfileDto.Name}' from {_userNickname}'s favorites?";
+        var title = "Remove favorite?";
+
+        var result = await DialogService.Confirm(
+            message,
+            title,
+            new ConfirmOptions
+            {
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            });
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var response = await ServerApi.DeleteAsync<BoolFlagReturnDto>($"api/artist/favorite/{UserId}/{artistOnUserProfileDto.Id}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var reload = await ServerApi.GetAsync<List<ArtistOnUserProfileDto>>($"api/artist/favorites/{UserId}");
+
+            _userFavorites = reload.Result;
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Favorite removed",
+                Detail = $"'{artistOnUserProfileDto.Name}' has been removed from {_userNickname}'s favorites.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+        }
+    }
+
+    private void OnClickDetails(int artistId)
+    {
+        NavManager.NavigateTo($"artist/{artistId}");
+    }
+}

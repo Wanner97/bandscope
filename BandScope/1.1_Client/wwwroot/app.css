@@ -1,0 +1,16 @@
+﻿.album-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.album-card:hover {
+    cursor: pointer;
+    transform: translateY(-15px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.album-card-link {
+    display: block;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+}

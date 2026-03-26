@@ -1,0 +1,240 @@
+﻿@page "/artist/addnew"
+@inject Blazored.LocalStorage.ILocalStorageService _LocalStorage
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@using BandScope.Client.Utility
+@using Client.APIs
+@using System.Text
+@inject ServerApi ServerApi
+@inject NavigationManager NavManager
+@inject NotificationService NotificationService
+
+<CheckAuthExpired />
+
+<AuthorizeView>
+    <Authorized>
+        <RadzenText TextStyle="TextStyle.DisplayH3">Add a new Artist</RadzenText>
+        
+        <RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center" Style="width: 800px">
+            <RadzenCard Variant="Variant.Outlined" Style="width: 100%">
+                <RadzenTemplateForm TItem="NewArtistDto" Data="_newArtist" @ref="_artistForm" Submit="OnSubmit" Style="width: 100%">
+                    <ChildContent Context="artist">
+                        <RadzenFieldset Text="Details">
+                            <RadzenRow>
+                                <RadzenFormField Text="Name" Variant="Variant.Outlined" Component="ArtistName" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="artist" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenTextBox Name="ArtistName" @bind-Value="@_newArtist.Name" />
+                                    </ChildContent>
+                                    <Helper>
+                                        <RadzenRequiredValidator Component="ArtistName" Text="Artist Name is required." />
+                                    </Helper>
+                                </RadzenFormField>
+                            </RadzenRow>
+                            
+                            <RadzenRow>
+                                <RadzenFormField Text="Origin" Variant="Variant.Outlined" Component="ArtistOrigin" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="globe" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenTextBox Name="ArtistOrigin" @bind-Value="@_newArtist.Origin" />
+                                    </ChildContent>
+                                </RadzenFormField>
+                            </RadzenRow>
+                            
+                            <RadzenRow>
+                                <RadzenFormField Text="Biography" Variant="Variant.Outlined" Component="ArtistBiography" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="article_person" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenTextArea @bind-Value="_newArtist.Biography" Rows="4" />
+                                    </ChildContent>
+                                </RadzenFormField>
+                            </RadzenRow>
+                            
+                            <RadzenRow>
+                                <RadzenFormField Text="last-fm Link" Variant="Variant.Outlined" Component="ArtistLastFmUrl" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="bigtop_updates" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenTextBox Name="ArtistLastFmUrl" @bind-Value="@_newArtist.LastFmUrl" />
+                                    </ChildContent>
+                                </RadzenFormField>
+                            </RadzenRow>
+                        </RadzenFieldset>
+                        
+                        <RadzenFieldset Text="Sound">
+                            <RadzenRow>
+                                <RadzenFormField Text="Style" Variant="Variant.Outlined" Component="ArtistStyle" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="library_music" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenAutoComplete Data="styleNameList" @bind-Value="_style.Name"
+                                                            FilterOperator="StringFilterOperator.Contains"
+                                                            FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+                                    </ChildContent>
+                                </RadzenFormField>
+                            </RadzenRow>
+                            
+                            <RadzenRow>
+                                <RadzenFormField Text="Genre" Variant="Variant.Outlined" Component="ArtistGenre" Style="width: 100%">
+                                    <Start>
+                                        <RadzenIcon Icon="queue_music" IconStyle="IconStyle.Base" />
+                                    </Start>
+                                    <ChildContent>
+                                        <RadzenAutoComplete Data="genreNameList" @bind-Value="_genre.Name"
+                                                            FilterOperator="StringFilterOperator.Contains"
+                                                            FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+                                    </ChildContent>
+                                </RadzenFormField>
+                            </RadzenRow>
+                        </RadzenFieldset>
+                        
+                        <RadzenFieldset Text="Pictures">
+                            <RadzenRow>
+                                <RadzenFormField Text="Thumbnail" Variant="Variant.Outlined" Component="ArtistThumbPicture" Style="width: 100%">
+                                    <RadzenFileInput TValue="string"
+                                                     @bind-Value="@_thumbnail.PictureDataUrl"
+                                                     @bind-FileName="_thumbnail.Filename" />
+                                </RadzenFormField>
+                            </RadzenRow>
+                            
+                            <RadzenRow>
+                                <RadzenFormField Text="Logo" Variant="Variant.Outlined" Component="ArtistLogoPicture" Style="width: 100%">
+                                    <RadzenFileInput TValue="string"
+                                                     @bind-Value="@_logo.PictureDataUrl"
+                                                     @bind-FileName="_logo.Filename" />
+                                </RadzenFormField>
+                            </RadzenRow>
+                        </RadzenFieldset>
+                        
+                        <RadzenButton class="rz-mt-2" Variant="Variant.Outlined"
+                                      ButtonStyle="ButtonStyle.Primary" Icon="upload"
+                                      ButtonType="ButtonType.Submit" Text="Submit" Style="width: 100%" />
+                    </ChildContent>
+                </RadzenTemplateForm>
+            </RadzenCard>
+        </RadzenStack>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private RadzenTemplateForm<NewArtistDto> _artistForm;
+
+    private NewArtistDto _newArtist = new();
+    private NewPictureDto _thumbnail = new();
+    private NewPictureDto _logo = new();
+    private StyleDto _style = new();
+    private GenreDto _genre = new();
+
+    public List<StyleDto> styleList = new List<StyleDto>();
+    public List<GenreDto> genreList = new List<GenreDto>();
+
+    public List<string> genreNameList = new List<string>();
+    public List<string> styleNameList = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var styleResponse = await ServerApi.GetAsync<List<StyleDto>>("api/style");
+
+        if (styleResponse.IsSuccessStatusCode)
+        {
+            styleList.AddRange(styleResponse.Result);
+
+            foreach (var styleDto in styleList)
+            {
+                styleNameList.Add(styleDto.Name);
+            }
+        }
+
+        var genreResponse = await ServerApi.GetAsync<List<GenreDto>>("api/genre");
+
+        if (genreResponse.IsSuccessStatusCode)
+        {
+            genreList.AddRange(genreResponse.Result);
+
+            foreach (var genreDto in genreList)
+            {
+                genreNameList.Add(genreDto.Name);
+            }
+        }
+    }
+
+    private async Task SetArtistStyle()
+    {
+        var styleResponse = await ServerApi.PostAsync<StyleDto>("api/style/new", _style);
+
+        if (styleResponse.IsSuccessStatusCode)
+        {
+            _newArtist.StyleId = styleResponse.Result.Id;
+        }
+    }
+
+    private async Task SetArtistGenre()
+    {
+        var genreResponse = await ServerApi.PostAsync<GenreDto>("api/genre/new", _genre);
+
+        if (genreResponse.IsSuccessStatusCode)
+        {
+            _newArtist.GenreId = genreResponse.Result.Id;
+        }
+    }
+
+    private async Task SetArtistPictures()
+    {
+        if (!string.IsNullOrWhiteSpace(_thumbnail.PictureDataUrl))
+        {
+            var thumbResponse = await ServerApi.PostAsync<PictureIdDto>("api/picture/new", _thumbnail);
+
+            if (thumbResponse.IsSuccessStatusCode)
+            {
+                _newArtist.ThumbnailId = thumbResponse.Result.Id;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_logo.PictureDataUrl))
+        {
+            var logoResponse = await ServerApi.PostAsync<PictureIdDto>("api/picture/new", _logo);
+
+            if (logoResponse.IsSuccessStatusCode)
+            {
+                _newArtist.LogoId = logoResponse.Result.Id;
+            }
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        if (!_artistForm.EditContext.Validate())
+        {
+            return;
+        }
+
+        await SetArtistStyle();
+
+        await SetArtistGenre();
+
+        await SetArtistPictures();
+
+        var artistResponse = await ServerApi.PostAsync<BoolFlagReturnDto>("api/artist/newfromuser", _newArtist);
+
+        if (artistResponse.IsSuccessStatusCode && artistResponse.Result.Flag)
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Artist saved",
+                Detail = $"Your artist '{_newArtist.Name}' was added to the database.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            NavManager.NavigateTo("/");
+        }
+    }
+}

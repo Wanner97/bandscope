@@ -1,0 +1,80 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavManager
+@inject Blazored.LocalStorage.ILocalStorageService _LocalStorage
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+
+<RadzenTheme Theme="standart-dark" />
+<RadzenComponents />
+
+<RadzenLayout>
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center">
+            <RadzenSidebarToggle Click="@(() => sideBarExpanded = !sideBarExpanded)" />
+            <RadzenLabel Text="BandScope" />
+        </RadzenStack>
+    </RadzenHeader>
+    
+    <RadzenSidebar Responsive="false" Style="width: max-content">
+        <RadzenPanelMenu DisplayStyle="@(sideBarExpanded? MenuItemDisplayStyle.IconAndText: MenuItemDisplayStyle.Icon)" ShowArrow="false"
+                         @bind-Value="currentPath"
+                         Change="OnMenuChange">
+            <RadzenPanelMenuItem Text="Home" Icon="home" Path="/" />
+            <AuthorizeView>
+                <Authorized>
+                    <RadzenPanelMenuItem Text="Profile" Icon="person" Path="/profile" />
+                    <RadzenPanelMenuItem Text="Logout" Icon="logout" Click="Logout" />
+                </Authorized>
+                <NotAuthorized>
+                    <RadzenPanelMenuItem Text="Login" Icon="login" Path="/login" />
+                    <RadzenPanelMenuItem Text="Register" Icon="login" Path="/register" />
+                </NotAuthorized>
+            </AuthorizeView>
+            <AuthorizeView Roles="Administrator">
+                <RadzenPanelMenuItem Text="Users" Icon="group" Path="/users"></RadzenPanelMenuItem>
+            </AuthorizeView>
+        </RadzenPanelMenu>
+    </RadzenSidebar>
+    
+    <RadzenBody>
+        @Body
+    </RadzenBody>
+</RadzenLayout>
+
+@code {
+    bool sideBarExpanded = true;
+    string? currentPath;
+
+    void OnMenuChange(RadzenPanelMenuItem item)
+    {
+        if (!string.IsNullOrEmpty(item.Path))
+            NavManager.NavigateTo(item.Path);
+    }
+
+    void SetCurrentPath()
+    {
+        var relative = NavManager.ToBaseRelativePath(NavManager.Uri);
+        currentPath = string.IsNullOrWhiteSpace(relative) ? "/" : "/" + relative;
+    }
+
+    void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        SetCurrentPath();
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        SetCurrentPath();
+        NavManager.LocationChanged += HandleLocationChanged;
+    }
+
+    private void Logout()
+    {
+        _LocalStorage.RemoveItemAsync("authToken");
+        var authStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+
+        authStateProvider.NotifyUserAuthenticationStateChanged();
+        StateHasChanged();
+    }
+}

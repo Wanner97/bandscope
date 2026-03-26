@@ -1,0 +1,125 @@
+﻿@page "/users"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@using BandScope.Client.Utility
+@using Client.APIs
+@inject ServerApi ServerApi
+@inject NavigationManager NavManager
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<CheckAuthExpired />
+
+<AuthorizeView Roles="Administrator">
+    @if (_users.Count < 1)
+    {
+        <RadzenProgressBarCircular Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid TItem="UserProfileDto"
+                        Data="_users"
+                        AllowColumnResize="true"
+                        AllowSorting="true"
+                        AllowPaging="true"
+                        PageSize="10"
+                        PagerHorizontalAlign="HorizontalAlign.Right"
+                        ShowPagingSummary="true"
+                        AllowFiltering="false">
+            <Columns>
+                <RadzenDataGridColumn TItem="UserProfileDto" Property="Id" Title="ID" TextAlign="TextAlign.Center" Sortable="true" />
+
+                <RadzenDataGridColumn TItem="UserProfileDto" Property="Nickname" Title="Nickname" TextAlign="TextAlign.Left" Sortable="true" />
+
+                <RadzenDataGridColumn TItem="UserProfileDto" Title="Actions" Sortable="false">
+                    <Template Context="row">
+                        <RadzenStack AlignItems="AlignItems.Center" Gap="10px">
+                            <RadzenStack Orientation="Orientation.Horizontal" Gap="8px">
+                                <RadzenButton Text="Reviews"
+                                              Icon="reviews"
+                                              ButtonStyle="ButtonStyle.Primary"
+                                              Variant="Variant.Outlined"
+                                              Click="@(() => OnClickReview(row))" />
+
+                                <RadzenButton Text="Favorites"
+                                              Icon="bookmarks"
+                                              ButtonStyle="ButtonStyle.Primary"
+                                              Variant="Variant.Outlined"
+                                              Click="@(() => OnClickFavorites(row))" />
+
+                                <RadzenButton Text="Delete User"
+                                              Icon="person_off"
+                                              ButtonStyle="ButtonStyle.Danger"
+                                              Variant="Variant.Outlined"
+                                              Click="@(() => OnClickDelete(row))" />
+                            </RadzenStack>
+                        </RadzenStack>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</AuthorizeView>
+
+@code {
+    private List<UserProfileDto> _users = new List<UserProfileDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await ServerApi.GetAsync<List<UserProfileDto>>("api/user");
+
+        if (result.IsSuccessStatusCode)
+        {
+            _users = result.Result;
+        }
+    }
+
+    private async Task OnClickDelete(UserProfileDto user)
+    {
+        var message = $"Do you really want to delete {user.Nickname}'s accout? This action can not be undone.";
+        var title = "Delete this account?";
+
+        var result = await DialogService.Confirm(
+            message,
+            title,
+            new ConfirmOptions
+            {
+                OkButtonText = "Yes",
+                CancelButtonText = "No"
+            });
+
+        if (result != true)
+        {
+            return;
+        }
+
+        var response = await ServerApi.DeleteAsync<BoolFlagReturnDto>($"api/user/delete/{user.Id}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var reload = await ServerApi.GetAsync<List<UserProfileDto>>("api/user");
+
+            _users = reload.Result;
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "User deleted",
+                Detail = $"The user account of {user.Nickname} has been deleted.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+
+            StateHasChanged();
+        }
+    }
+
+    private void OnClickFavorites(UserProfileDto userProfileDto)
+    {
+        NavManager.NavigateTo($"user{userProfileDto.Id}/favorites");
+    }
+
+    private void OnClickReview(UserProfileDto userProfileDto)
+    {
+        NavManager.NavigateTo($"user{userProfileDto.Id}/reviews");
+    }
+}

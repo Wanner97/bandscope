@@ -1,0 +1,40 @@
+﻿@using Client.APIs
+@inject ServerApi ServerApi
+
+<RadzenCard Variant="Variant.Outlined">
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center">
+        <RadzenText TextStyle="TextStyle.H5">@_review.Nickname</RadzenText>
+
+        <RadzenStack Orientation="Orientation.Horizontal">
+            <RadzenRating @bind-Value="_review.Rating" ReadOnly="true" Stars="10" />
+            <RadzenText>@_review.Rating / 10</RadzenText>
+        </RadzenStack>
+    </RadzenStack>
+
+    <RadzenRow AlignItems="AlignItems.Start" class="rz-mt-2">
+        <RadzenIcon Icon="date_range" IconStyle="IconStyle.Primary" />
+        <RadzenText TextStyle="TextStyle.Body2">@_review.CreatedAt.ToShortDateString()</RadzenText>
+    </RadzenRow>
+
+    <RadzenRow>
+        <div class="rz-mt-2">
+            @((MarkupString)_review.Comment)
+        </div>
+    </RadzenRow>
+</RadzenCard>
+
+@code {
+    [Parameter] public int ReviewId { get; set; }
+
+    private ReviewOnArtistDetailDto? _review;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var reviewResponse = await ServerApi.GetAsync<ReviewOnArtistDetailDto>($"api/review/{ReviewId}");
+
+        if (reviewResponse.IsSuccessStatusCode)
+        {
+            _review = reviewResponse.Result;
+        }
+    }
+}

@@ -1,0 +1,342 @@
+﻿@page "/"
+@using Client.APIs
+@inject ServerApi ServerApi
+@inject NavigationManager NavManager
+
+<RadzenPanel>
+    <HeaderTemplate>
+        <RadzenText TextStyle="TextStyle.DisplayH3">Artists on display</RadzenText>
+    </HeaderTemplate>
+    
+    <ChildContent>
+        <RadzenCard Variant="Variant.Text" Style="margin-bottom: 16px">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" Gap="8px">
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" Gap="8px">
+                        <RadzenFormField Text="Artist Name" Variant="Variant.Outlined" Component="searchArtistNameInput">
+                            <Start>
+                                <RadzenIcon Icon="search" IconStyle="IconStyle.Base" />
+                            </Start>
+                            <ChildContent>
+                                <RadzenTextBox @bind-Value="_searchArtistNameInput"
+                                               Change="@(async args  => await ApplySearch())" />
+                            </ChildContent>
+                            <End>
+                                <RadzenButton Icon="filter_alt_off" Variant="Variant.Text" Size="ButtonSize.Small"
+                                              Click="@(async => ClearSearchField())" />
+                            </End>
+                        </RadzenFormField>
+                        
+                        <RadzenFormField Text="Style" Variant="Variant.Outlined" Component="searchStyleNameInput">
+                            <Start>
+                                <RadzenIcon Icon="filter_alt" IconStyle="IconStyle.Base" />
+                            </Start>
+                            <ChildContent>
+                                <RadzenAutoComplete Data="@_styleOptions" @bind-Value="_searchStyleNameInput" Change="@(args => ApplyFilters())"
+                                                    FilterOperator="StringFilterOperator.Contains"
+                                                    FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+                            </ChildContent>
+                            <End>
+                                <RadzenButton Icon="filter_alt_off" Variant="Variant.Text" Size="ButtonSize.Small"
+                                              Click="@ClearStyleField" />
+                            </End>
+                        </RadzenFormField>
+                        
+                        <RadzenFormField Text="Genre" Variant="Variant.Outlined" Component="searchGenreNameInput">
+                            <Start>
+                                <RadzenIcon Icon="filter_alt" IconStyle="IconStyle.Base" />
+                            </Start>
+                            <ChildContent>
+                                <RadzenAutoComplete Data="@_genreOptions" @bind-Value="_searchGenreNameInput" Change="@(args => ApplyFilters())"
+                                                    FilterOperator="StringFilterOperator.Contains"
+                                                    FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+                            </ChildContent>
+                            <End>
+                                <RadzenButton Icon="filter_alt_off" Variant="Variant.Text" Size="ButtonSize.Small"
+                                              Click="@ClearGenreField" />
+                            </End>
+                        </RadzenFormField>
+                        
+                        <RadzenFormField Text="" Variant="Variant.Text">
+                            <RadzenButton Text="Clear All" Icon="filter_alt_off" ButtonType="ButtonType.Button"
+                                          ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Click="@OnClickClear" />
+                        </RadzenFormField>
+                    </RadzenStack>
+                </RadzenCard>
+            </RadzenStack>
+        </RadzenCard>
+        
+        @if (_isLoading)
+        {
+            <RadzenProgressBarCircular Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+        }
+        else
+        {
+            @if (!_filteredArtists.Any())
+            {
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenRow AlignItems="AlignItems.Center">
+                        <RadzenText TextStyle="TextStyle.DisplayH6">Your favorite artists seems to be missing in the Database.</RadzenText>
+                        <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Primary" Icon="add_circle" Text="Add artist"
+                                      Click="OnClickAddArtist"/>
+                    </RadzenRow>
+                </RadzenCard>
+            }
+            else
+            {
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenDataList AllowPaging="true"
+                                    Data="@_filteredArtists"
+                                    TItem="ArtistListDto" 
+                                    PageSize="4" 
+                                    PagerHorizontalAlign="HorizontalAlign.Right" 
+                                    ShowPagingSummary="true">
+                        <Template Context="row">
+                            <RadzenRow AlignItems="AlignItems.Center">
+                                <RadzenColumn>
+                                    <RadzenImage Path="@row.ThumbnailUrl" Style="width: 120px; height: 120px" />
+                                </RadzenColumn>
+
+                                <RadzenColumn>
+                                    <RadzenRow Gap="0">
+                                        <RadzenColumn>
+                                            <RadzenText TextStyle="TextStyle.DisplayH6">Name</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Body2">@row.ArtistName</RadzenText>
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                </RadzenColumn>
+
+                                <RadzenColumn>
+                                    <RadzenRow Gap="0">
+                                        <RadzenColumn>
+                                            <RadzenText TextStyle="TextStyle.DisplayH6">Style</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Body2">@row.StyleName</RadzenText>
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                </RadzenColumn>
+
+                                <RadzenColumn>
+                                    <RadzenRow Gap="0">
+                                        <RadzenColumn>
+                                            <RadzenText TextStyle="TextStyle.DisplayH6">Genre</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Body2">@row.GenreName</RadzenText>
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                </RadzenColumn>
+                                
+                                <RadzenColumn>
+                                    <RadzenRow Gap="0">
+                                        <RadzenColumn>
+                                            <RadzenText TextStyle="TextStyle.DisplayH6">Average rating</RadzenText>
+                                            @if (row.IsFromExternalApi)
+                                            {
+                                                <RadzenText TextStyle="TextStyle.Body2">Artist comes from external API</RadzenText>
+                                            }
+                                            else
+                                            {
+                                                <RadzenRating @bind-Value="@row.AverageRating" ReadOnly="true" Stars="10" />
+                                            }
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                </RadzenColumn>
+
+                                <RadzenColumn>
+                                    <RadzenRow Gap="0">
+                                        <RadzenColumn>
+                                            <RadzenText TextStyle="TextStyle.Body2">favorized by @row.FavorizedCount users</RadzenText>
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                </RadzenColumn>
+                                
+                                <RadzenColumn>
+                                    <RadzenButton Variant="Variant.Outlined"
+                                                  ButtonStyle="ButtonStyle.Primary"
+                                                  Icon="artist"
+                                                  Text="Details"
+                                                  Click="@(() => OnClickDetails(row))" />
+                                </RadzenColumn>
+                            </RadzenRow>
+                        </Template>
+                    </RadzenDataList>
+                </RadzenCard>
+            }
+        }
+    </ChildContent>
+</RadzenPanel>
+
+@code {
+    private List<ArtistListDto> _artists = new();
+    private List<ArtistListDto> _filteredArtists = new();
+    private bool _isLoading;
+
+    private string? _searchGenreNameInput;
+    private string? _searchStyleNameInput;
+    private string? _searchArtistNameInput;
+
+    private List<string> _styleOptions = new();
+    private List<string> _genreOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+
+        var artistsResponse = await ServerApi.GetAsync<List<ArtistListDto>>("api/artist/list");
+
+        if (artistsResponse.IsSuccessStatusCode)
+        {
+            _filteredArtists.Clear();
+
+            _artists.AddRange(artistsResponse.Result);
+
+            _filteredArtists = SortArtists(_artists).ToList();
+        }
+
+        BuildFilterOptions();
+
+        _isLoading = false;
+    }
+
+    private async Task ApplySearch()
+    {
+        _isLoading = true;
+
+        _artists.Clear();
+        _filteredArtists.Clear();
+
+        if (string.IsNullOrWhiteSpace(_searchArtistNameInput) || string.IsNullOrEmpty(_searchArtistNameInput))
+        {
+            var reloadArtists = await ServerApi.GetAsync<List<ArtistListDto>>("api/artist/list");
+
+            if (reloadArtists.IsSuccessStatusCode)
+            {
+                _artists.AddRange(reloadArtists.Result);
+
+                _filteredArtists = SortArtists(_artists).ToList();
+
+                BuildFilterOptions();
+
+                _isLoading = false;
+                return;
+            }
+
+        }
+
+        var artistSearchResponse = await ServerApi.GetAsync<List<ArtistListDto>>($"api/artist/search/{_searchArtistNameInput}");
+
+        if (artistSearchResponse.IsSuccessStatusCode)
+        {
+            _artists.AddRange(artistSearchResponse.Result);
+
+            _filteredArtists = SortArtists(_artists).ToList();
+
+            BuildFilterOptions();
+
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnClickClear()
+    {
+        _searchArtistNameInput = string.Empty;
+        _searchStyleNameInput = string.Empty;
+        _searchGenreNameInput = string.Empty;
+
+        await ApplySearch();
+    }
+
+    public async Task ClearSearchField()
+    {
+        _searchArtistNameInput = string.Empty;
+        await ApplySearch();
+    }
+
+    public void ApplyFilters()
+    {
+        IEnumerable<ArtistListDto> artistListDtos = _artists;
+
+        if (!string.IsNullOrEmpty(_searchStyleNameInput))
+        {
+            artistListDtos = artistListDtos.Where(a =>
+                a.StyleName != null &&
+                a.StyleName.Contains(_searchStyleNameInput, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrEmpty(_searchGenreNameInput))
+        {
+            artistListDtos = artistListDtos.Where(a =>
+                a.GenreName != null &&
+                a.GenreName.Contains(_searchGenreNameInput, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        _filteredArtists = SortArtists(artistListDtos).ToList();
+    }
+
+    public void ClearStyleField()
+    {
+        _searchStyleNameInput = string.Empty;
+        ApplyFilters();
+    }
+
+    public void ClearGenreField()
+    {
+        _searchGenreNameInput = string.Empty;
+        ApplyFilters();
+    }
+
+    public void BuildFilterOptions()
+    {
+        _styleOptions.Clear();
+        _genreOptions.Clear();
+
+        foreach (var artistListDto in _artists)
+        {
+            var styleName = artistListDto.StyleName;
+            if (!string.IsNullOrWhiteSpace(styleName) &&
+                !_styleOptions.Contains(styleName))
+            {
+                _styleOptions.Add(styleName);
+            }
+
+            var genreName = artistListDto.GenreName;
+            if (!string.IsNullOrWhiteSpace(genreName) &&
+                !_genreOptions.Contains(genreName))
+            {
+                _genreOptions.Add(genreName);
+            }
+        }
+
+        _styleOptions.Sort();
+        _genreOptions.Sort();
+    }
+
+    private IEnumerable<ArtistListDto> SortArtists(IEnumerable<ArtistListDto> artistListDtos)
+    {
+        if (artistListDtos == null)
+        {
+            return Enumerable.Empty<ArtistListDto>();
+        }
+
+        return artistListDtos
+            .OrderByDescending(a => a.AverageRating)
+            .ThenBy(a => a.ArtistName);
+    }
+
+    private void OnClickAddArtist()
+    {
+        NavManager.NavigateTo("/artist/addnew");
+    }
+
+    private void OnClickDetails(ArtistListDto artistListDto)
+    {
+        if (artistListDto.IsFromExternalApi)
+        {
+            NavManager.NavigateTo($"/artist/audiodb/{artistListDto.TheAudioDbId}");
+        }
+        else
+        {
+            NavManager.NavigateTo($"/artist/{artistListDto.Id}");
+        }
+    }
+}

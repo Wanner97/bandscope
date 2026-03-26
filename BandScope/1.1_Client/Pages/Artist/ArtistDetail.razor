@@ -1,0 +1,442 @@
+﻿@page "/artist/{artistId:int}"
+@page "/artist/audiodb/{theAudioDbId:int}"
+@using Client.APIs
+@using Microsoft.AspNetCore.Components.Authorization
+@using BandScope.Client.APIs.ServerApiObjects
+@inject ServerApi ServerApi
+@inject NavigationManager NavManager
+@inject NotificationService NotificationService
+@inject AuthenticationStateProvider AuthStateProvider
+
+
+@if (_isLoading)
+{
+    <RadzenProgressBarCircular Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+}
+else if (_artist is null)
+{
+    <RadzenCard Variant="Variant.Flat">
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenText TextStyle="TextStyle.DisplayH3">No Artist could be loaded</RadzenText>
+        </RadzenCard>
+    </RadzenCard>
+}
+else
+{
+    <RadzenCard Variant="Variant.Flat">
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenRow>
+                <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="16px">
+                    <RadzenImage Path="@_artist.ThumbnailUrl" Style="width: 100%; max-width: 400px; object-fit: cover;"/>
+                    
+                    <RadzenStack Orientation="Orientation.Vertical" JustifyContent="JustifyContent.Center">
+                        <RadzenText TextStyle="TextStyle.DisplayH3" TextAlign="TextAlign.Start">@_artist.ArtistName</RadzenText>
+                        <RadzenText TextStyle="TextStyle.DisplayH5" TextAlign="TextAlign.Start">Genre: @(_artist.GenreName ?? "Unknown")</RadzenText>
+                        <RadzenText TextStyle="TextStyle.DisplayH5" TextAlign="TextAlign.Start">Style: @(_artist.StyleName ?? "Unknown")</RadzenText>
+                        <RadzenText TextStyle="TextStyle.DisplayH5" TextAlign="TextAlign.Start">From: @_artist.Origin</RadzenText>
+                        <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Base" Icon="bigtop_updates"
+                                      Text="last-fm" Style="align-self: start; height: auto;" Disabled="@string.IsNullOrWhiteSpace(_artist?.LastFmUrl)"
+                                      Click="@OnClickLastFm"/>
+                        <RadzenButton Variant="Variant.Outlined" ButtonStyle="ButtonStyle.Primary"
+                                      Icon="@(_artistIsInUsersFavorites ? "bookmark_remove" : "bookmark_add")"
+                                      Text="@(_artistIsInUsersFavorites ? "Remove from Favorites" : "Add to Favorites")"
+                                      Style="align-self: start; height: auto;" Click="@OnClickAddToFavorites" Disabled="@(!_userIsLoggedIn)"
+                                      IsBusy="_favoriteIsBusy"/>
+                    </RadzenStack>
+                    
+                    <RadzenImage Path="@_artist.LogoUrl" Style="margin-left: 10px; height: 350px; width: auto; object-fit: contain"/>
+                </RadzenStack>
+            </RadzenRow>
+            
+            <RadzenRow>
+                <RadzenCard Variant="Variant.Outlined" Style="margin-top: 10px; margin-bottom: 10px; width: 100%;">
+                    @if (_artist.IsFromExternalApi)
+                    {
+                        <RadzenText TextAlign="TextAlign.Left"
+                                    TextStyle="TextStyle.DisplayH6">Artist comes from external API</RadzenText>
+                    }
+                    else
+                    {
+                        <RadzenStack Orientation="Orientation.Horizontal">
+                            <RadzenRating @bind-Value="_artist.AverageRating" Stars="10" ReadOnly="true"/>
+                            <RadzenText TextAlign="TextAlign.Left"
+                                        TextStyle="TextStyle.DisplayH6">@_artist.Reviews.Count ratings / favorized by @_artist.FavorizedCount users
+                            </RadzenText>
+                        </RadzenStack>
+                    }
+                </RadzenCard>
+            </RadzenRow>
+
+            <RadzenRow>
+                <RadzenText TextAlign="TextAlign.Left" TextStyle="TextStyle.Body1" Style="width: 60%">@_artist.Biography</RadzenText>
+            </RadzenRow>
+        </RadzenCard>
+    </RadzenCard>
+
+    <RadzenCard Variant="Variant.Flat">
+        <RadzenTabs>
+            <Tabs>
+                <RadzenTabsItem Text="Reviews">
+                    @if (_artist.Reviews != null && _artist.Reviews.Any())
+                    {
+                        <RadzenDataList Data="@_artist.Reviews"
+                                        TItem="ReviewOnArtistDetailDto"
+                                        AllowPaging="true"
+                                        PageSize="4"
+                                        PagerHorizontalAlign="HorizontalAlign.Right"
+                                        ShowPagingSummary="true"
+                                        Style="width: 100%">
+                            <Template Context="row">
+                                <RadzenCard Variant="Variant.Outlined">
+                                    <RadzenStack Orientation="Orientation.Horizontal"
+                                                 JustifyContent="JustifyContent.SpaceBetween"
+                                                 AlignItems="AlignItems.Center">
+                                        <RadzenText TextStyle="TextStyle.H5">@row.Nickname</RadzenText>
+
+                                        <RadzenStack Orientation="Orientation.Horizontal">
+                                            <RadzenRating @bind-Value="row.Rating" ReadOnly="true" Stars="10" />
+                                            <RadzenText>@row.Rating / 10</RadzenText>
+                                        </RadzenStack>
+                                    </RadzenStack>
+
+                                    <RadzenRow AlignItems="AlignItems.Start" class="rz-mt-2">
+                                        <RadzenIcon Icon="date_range" IconStyle="IconStyle.Primary" />
+                                        <RadzenText TextStyle="TextStyle.Body2">@row.CreatedAt.ToShortDateString()</RadzenText>
+                                    </RadzenRow>
+
+                                    <RadzenRow>
+                                        <div class="rz-mt-2">
+                                            @((MarkupString)row.Comment)
+                                        </div>
+                                    </RadzenRow>
+                                </RadzenCard>
+                            </Template>
+                        </RadzenDataList>
+                    }
+                    else
+                    {
+                        <RadzenCard Variant="Variant.Outlined">
+                            <RadzenText TextStyle="TextStyle.Body1">There are no reviews for this artist yet.</RadzenText>
+                        </RadzenCard>
+                    }
+                </RadzenTabsItem>
+                
+                <RadzenTabsItem Text="Add Review">
+                    @if (_userIsLoggedIn)
+                    {
+                        <RadzenTemplateForm TItem="FullReviewDto" Data="_userReview" Submit="@OnClickSubmitReview" Style="width: 100%">
+                            <ChildContent>
+                                <RadzenRow>
+                                    <RadzenFieldset Text="Rating">
+                                        <RadzenStack>
+                                            <RadzenRating Name="ReviewRating" @bind-Value="_userReview.Rating" Stars="10" />
+                                            <RadzenNumericRangeValidator Component="ReviewRating" Min="1m" Max="10m" Text="Rating can't consist of zero stars." />
+                                        </RadzenStack>
+                                    </RadzenFieldset>
+                                </RadzenRow>
+
+                                <RadzenRow>
+                                    <RadzenFieldset Text="Comment" Style="width: 100%">
+                                        <RadzenStack Style="width: 100%">
+                                            <RadzenHtmlEditor Name="ReviewComment" @bind-Value="_userReview.Comment" Style="height: 450px">
+                                                <RadzenHtmlEditorUndo />
+                                                <RadzenHtmlEditorRedo />
+                                                <RadzenHtmlEditorSeparator />
+                                                <RadzenHtmlEditorBold />
+                                                <RadzenHtmlEditorItalic />
+                                                <RadzenHtmlEditorUnderline />
+                                                <RadzenHtmlEditorStrikeThrough />
+                                                <RadzenHtmlEditorSeparator />
+                                                <RadzenHtmlEditorColor />
+                                                <RadzenHtmlEditorBackground />
+                                                <RadzenHtmlEditorRemoveFormat />
+                                                <RadzenHtmlEditorFontSize />
+                                                <RadzenHtmlEditorLink />
+                                            </RadzenHtmlEditor>
+                                            <RadzenRequiredValidator Component="ReviewComment" Text="Comment is required." />
+                                        </RadzenStack>
+                                    </RadzenFieldset>
+                                </RadzenRow>
+
+                                <RadzenButton class="rz-mt-2"
+                                              Icon="upload"
+                                              Variant="Variant.Outlined"
+                                              ButtonStyle="ButtonStyle.Primary"
+                                              ButtonType="ButtonType.Submit"
+                                              Text="Submit your Review" />
+                            </ChildContent>
+                        </RadzenTemplateForm>
+                    }
+                    else
+                    {
+                        <RadzenCard Variant="Variant.Outlined">
+                            <RadzenText>
+                                You must be logged in to review/rate artists.
+                            </RadzenText>
+                        </RadzenCard>
+                    }
+                </RadzenTabsItem>
+                
+                <RadzenTabsItem Text="Discography">
+                    <RadzenDataList AllowPaging="false" Data="_albums" TItem="AlbumDto" WrapItems="true">
+                        <Template Context="row">
+                            <RadzenCard Variant="Variant.Outlined" Style="width: 170px; cursor: pointer" class="album-card">
+                                <a href="@BuildAlbumSearchUrl(row)"
+                                   target="_blank"
+                                   class="album-card-link"
+                                   style="text-decoration: none">
+                                    <RadzenStack Orientation="Orientation.Vertical" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center">
+                                        <RadzenImage Path="@row.ImageUrl" Style="width: 150px; height: 150px;" />
+                                        <RadzenText TextStyle="TextStyle.Body1" TextAlign="TextAlign.Center">@row.Name</RadzenText>
+                                        <RadzenText TextStyle="TextStyle.Body2" TextAlign="TextAlign.Center">@row.ReleaseYear</RadzenText>
+                                    </RadzenStack>
+                                </a>
+                            </RadzenCard>
+                        </Template>
+                    </RadzenDataList>
+                </RadzenTabsItem>
+            </Tabs>
+        </RadzenTabs>
+    </RadzenCard>
+}
+
+
+@code {
+    [Parameter] public int artistId { get; set; }
+    [Parameter] public int theAudioDbId { get; set; }
+
+    private ArtistDetailDto? _artist;
+    private List<AlbumDto> _albums = new();
+    private FullReviewDto _userReview = new();
+    private GenreDto _genre = new();
+    private StyleDto _style = new();
+    private bool _isLoading;
+    private bool _userIsLoggedIn;
+    private bool _artistIsInUsersFavorites;
+    private bool _favoriteIsBusy;
+    private bool _reviewIsBusy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _artist = null;
+            _artistIsInUsersFavorites = false;
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                _userIsLoggedIn = true;
+            }
+
+            ServerApiBase<ArtistDetailDto>? artistResponse = null;
+            ServerApiBase<List<AlbumDto>>? albumResponse = null;
+
+            if (artistId > 0)
+            {
+                artistResponse = await ServerApi.GetAsync<ArtistDetailDto>($"api/artist/{artistId}");
+
+                albumResponse = await ServerApi.GetAsync<List<AlbumDto>>($"api/album/{artistId}");
+            }
+            else
+            {
+                artistResponse = await ServerApi.GetAsync<ArtistDetailDto>($"api/artist/audiodb/{theAudioDbId}");
+
+                albumResponse = await ServerApi.GetAsync<List<AlbumDto>>($"api/album/audiodb/{theAudioDbId}");
+            }
+
+            if (artistResponse?.IsSuccessStatusCode == true)
+            {
+                _artist = artistResponse.Result;
+
+                _genre.Name = _artist.GenreName ?? "";
+                _style.Name = _artist.StyleName ?? "";
+            }
+            else
+            {
+                return;
+            }
+
+            if (albumResponse?.IsSuccessStatusCode == true && albumResponse.Result.Any())
+            {
+                _albums = albumResponse.Result;
+
+                _albums = SortAlbumDtos().ToList();
+            }
+
+            if (!_artist.IsFromExternalApi && _userIsLoggedIn)
+            {
+                var favoriteResponse = await ServerApi.GetAsync<BoolFlagReturnDto>($"api/artist/{_artist.Id}/favorite");
+
+                if (favoriteResponse.IsSuccessStatusCode)
+                {
+                    _artistIsInUsersFavorites = favoriteResponse.Result.Flag;
+                }
+
+                var reviewResponse = await ServerApi.GetAsync<FullReviewDto>($"api/review/byuserandartist/{_artist.Id}");
+
+                if (reviewResponse.IsSuccessStatusCode)
+                {
+                    _userReview = reviewResponse.Result;
+                }
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnClickAddToFavorites()
+    {
+        _favoriteIsBusy = true;
+
+        if (_artist.IsFromExternalApi)
+        {
+            await SaveAudioDbArtistToDb();
+        }
+
+        ServerApiBase<BoolFlagReturnDto> favoriteResponse;
+
+        if (_artistIsInUsersFavorites)
+        {
+            favoriteResponse = await ServerApi.DeleteAsync<BoolFlagReturnDto>($"api/artist/favorite/{_artist.Id}");
+        }
+        else
+        {
+            favoriteResponse = await ServerApi.PostAsync<BoolFlagReturnDto>($"api/artist/favorite/{_artist.Id}", null);
+        }
+
+        if (favoriteResponse.IsSuccessStatusCode && favoriteResponse.Result.Flag)
+        {
+            _artistIsInUsersFavorites = !_artistIsInUsersFavorites;
+
+            var reload = await ServerApi.GetAsync<ArtistDetailDto>($"api/artist/{_artist.Id}");
+
+            _artist = reload.Result;
+            _favoriteIsBusy = false;
+            StateHasChanged();
+        }
+
+        _favoriteIsBusy = false;
+    }
+
+    private async Task OnClickSubmitReview()
+    {
+        if (_artist.IsFromExternalApi)
+        {
+            await SaveAudioDbArtistToDb();
+        }
+
+        if (_userReview.Id > 0)
+        {
+            var reviewUpdateResponse = await ServerApi.PutAsync<BoolFlagReturnDto>("api/review/update", _userReview);
+
+            if (!reviewUpdateResponse.IsSuccessStatusCode || !reviewUpdateResponse.Result.Flag)
+            {
+                return;
+            }
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Review updated",
+                Detail = $"Your review of '{_artist.ArtistName}' was updated.",
+                Severity = NotificationSeverity.Info,
+                Duration = 4000
+            });
+        }
+        else
+        {
+            var reviewResponse = await ServerApi.PostAsync<FullReviewDto>($"api/review/add/{_artist.Id}", _userReview);
+
+            if (!reviewResponse.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            _userReview = reviewResponse.Result;
+
+            NotificationService.Notify(new NotificationMessage
+            {
+                Summary = "Review submitted",
+                Detail = $"Your review of '{_artist.ArtistName}' was submitted successfully.",
+                Severity = NotificationSeverity.Success,
+                Duration = 4000
+            });
+        }
+
+        var reload = await ServerApi.GetAsync<ArtistDetailDto>($"api/artist/{_artist.Id}");
+
+        _artist = reload.Result;
+
+        StateHasChanged();
+    }
+
+    private async Task SaveAudioDbArtistToDb()
+    {
+        var genreResponse = await ServerApi.PostAsync<GenreDto>("api/genre/new", _genre);
+
+        if (genreResponse.IsSuccessStatusCode)
+        {
+            _artist.GenreId = genreResponse.Result.Id;
+        }
+
+        var styleResponse = await ServerApi.PostAsync<StyleDto>("api/style/new", _style);
+
+        if (styleResponse.IsSuccessStatusCode)
+        {
+            _artist.StyleId = styleResponse.Result.Id;
+        }
+
+        var artistResponse = await ServerApi.PostAsync<ArtistDetailDto>("api/artist/newfromaudiodb", _artist);
+
+        if (artistResponse.IsSuccessStatusCode)
+        {
+            _artist = artistResponse.Result;
+
+            foreach (var albumDto in _albums)
+            {
+                albumDto.ArtistId = _artist.Id;
+                await ServerApi.PostAsync<AlbumDto>("api/album/new", albumDto);
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private void OnClickLastFm()
+    {
+        if (string.IsNullOrWhiteSpace(_artist?.LastFmUrl))
+        {
+            return;
+        }
+
+        NavManager.NavigateTo(_artist?.LastFmUrl);
+    }
+
+    private string BuildAlbumSearchUrl(AlbumDto albumDto)
+    {
+        var artistName = _artist?.ArtistName ?? string.Empty;
+        var albumName = albumDto?.Name ?? string.Empty;
+
+        var query = $"{artistName} {albumName}".Trim();
+        var encoded = Uri.EscapeDataString(query);
+
+        return $"https://www.google.com/search?q={encoded}";
+    }
+
+    private IEnumerable<AlbumDto> SortAlbumDtos()
+    {
+        if (_albums.Any())
+        {
+            return _albums
+                .OrderBy(a => a.ReleaseYear);
+        }
+
+        return _albums;
+    }
+}
