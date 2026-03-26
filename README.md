@@ -128,6 +128,21 @@ Depending on your setup, create or update the database using either:
 
 - the Package Manager Console in Visual Studio
 - the dotnet ef CLI
+
+The configuration files will automatically seed some entries into the DB:
+
+- **an admin account**
+  - Nickname: admin
+  - E-Mail: admin@email.com
+  - Password: Admin@1234
+- **a user account**
+  - Nickname: user
+  - E-Mail: user@email.com
+  - Password: User@12345
+- default entries for unknown styles, genres, etc
+- some test data
+
+If you want to change a users role, you will have to do that directly on the database, for example with SQL Server Management Studio.
 #### 6. Start the application
 - Configure the startup profile as 'Multiple startup projects'
 - Set the projects '1.2_Server' and '1.1_Client' as startup projects
