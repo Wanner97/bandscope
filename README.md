@@ -4,6 +4,7 @@ I carried out this project as part of my **IPA (Individuelle Praxisarbeit, trans
 In order to successfully complete the apprenticeship as an 'Informatiker Applikationsentwickler EFZ' in Switzerland and obtain the 'Eidgenössisches Fähigkeitszeugnis (EFZ)', an individual practical project must be carried out during the final year of the apprenticeship, which must be completed within 10 working days (80 hours). The evaluation of this project has a significant impact on the final grade on the EFZ.
 ## Project Overview
 The goal of the project was to design and implement an independent, layered software solution from analysis and architecture through implementation and manual testing. The application combines local data management with external artist metadata from TheAudioDb and provides authenticated functionality such as reviews, favorites, and administrative user management.
+>[!NOTE]
 > The project was built and tested for **localhost execution**.  
 > Deployment to a public environment was **not part of the IPA requirements**.
 
@@ -104,7 +105,8 @@ To run the project locally, you need:
 - Optionally SQL Server Management Studio (SSMS)
 - An API Key for the REST-API from TheAudioDb (They list a key for their free tier on their website)
 
-Please note, that if you use the free api key from TheAudioDb, not all the features used in this project will work as intended.
+>[!TIP]
+>If you use the free api key from TheAudioDb, not all the features used in this project will work as intended.
 ### Getting Started
 #### 1. Clone the repository
 #### 2. Open the solution
@@ -142,7 +144,8 @@ The configuration files will automatically seed some entries into the DB:
 - default entries for unknown styles, genres, etc
 - some test data
 
-If you want to change a users role, you will have to do that directly on the database, for example with SQL Server Management Studio.
+>[!NOTE]
+>If you want to change a users role, you will have to do that directly on the database, for example with SQL Server Management Studio.
 #### 6. Start the application
 - Configure the startup profile as 'Multiple startup projects'
 - Set the projects '1.2_Server' and '1.1_Client' as startup projects
@@ -166,26 +169,28 @@ The frontend also contains logic to detect expired tokens and redirect the user 
 
 ---
 
-## Notes on Configuration and Secrets
-This repository intentionally includes the local appsettings.json configuration.
-
-That is not because I consider committing secrets to be good production practice.
-It is included deliberately for documentation and reproducibility reasons:
-
-- The IPA requirement was localhost execution only
-- Public deployment was not required
-- The repository is meant to show how the project is structured and configured
-- The included configuration makes it easier to understand and reproduce the original development setup
+>[!NOTE]
+>## Notes on Configuration and Secrets
+>This repository intentionally includes the local appsettings.json configuration.
+>
+>That is not because I consider committing secrets to be good production practice.
+>It is included deliberately for documentation and reproducibility reasons:
+>
+>- The IPA requirement was localhost execution only
+>- Public deployment was not required
+>- The repository is meant to show how the project is structured and configured
+>- The included configuration makes it easier to understand and reproduce the original development setup
 
 If this project were to be prepared for a real deployment, secrets and API keys would of course be moved to a secure secret-management approach and would not be included in source control.
 
 ---
 
-## Disclaimer
-This repository reflects the state of the project within the scope and time constraints of an IPA.
-The focus was on delivering a complete, well-structured, locally executable application within the formal requirements of the assignment.
-
-It should therefore be understood as a documented practical project, not as a production-ready SaaS product.
+>[!IMPORTANT]
+>## Disclaimer
+>This repository reflects the state of the project within the scope and time constraints of an IPA.
+>The focus was on delivering a complete, well-structured, locally executable application within the formal requirements of the assignment.
+>
+>It should therefore be understood as a documented practical project, not as a production-ready SaaS product.
 
 ---
 
